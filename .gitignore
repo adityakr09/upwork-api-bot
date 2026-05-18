@@ -1,2 +1,4 @@
 chroma_store/ 
 .env 
+__pycache__/ 
+API_Documentation_Partial.pdf 
