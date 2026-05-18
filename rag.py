@@ -1,3 +1,10 @@
+"""
+rag.py
+------
+Handles retrieval from ChromaDB and calls the DeepInfra
+Meta-Llama API to generate answers.
+"""
+
 import os
 import time
 import requests
@@ -14,8 +21,8 @@ def get_vectorstore():
     return Chroma(persist_directory=CHROMA_DIR, embedding_function=embeddings)
 
 
-def retrieve_chunks(query, k=3):
-    """Fetch top-k relevant chunks for the query (Part B1)."""
+def retrieve_chunks(query, k=5):
+    """Fetch top-5 relevant chunks for the query (Part B1)."""
     store = get_vectorstore()
     results = store.similarity_search(query, k=k)
     return [doc.page_content for doc in results]
@@ -23,6 +30,7 @@ def retrieve_chunks(query, k=3):
 
 SYSTEM_PROMPT = """You are a Senior Upwork API Consultant with deep expertise in the Upwork developer platform.
 Your job is to answer developer questions accurately using ONLY the documentation context provided below.
+Read the entire context carefully before answering.
 If the answer is not found in the provided context, you must respond with exactly:
 "I'm sorry, but the provided documentation does not contain that information."
 Do not guess, do not make up information. Stay professional and concise."""
@@ -49,7 +57,7 @@ def ask_llm(query, chunks, api_key):
         "model": MODEL,
         "messages": messages,
         "max_tokens": 512,
-        "temperature": 0.2  # low temp = more factual, less creative
+        "temperature": 0.1
     }
 
     start = time.time()
@@ -67,5 +75,4 @@ def query_rag(user_query, api_key):
     chunks = retrieve_chunks(user_query)
     answer, latency = ask_llm(user_query, chunks, api_key)
     return answer, chunks, latency
-
 
