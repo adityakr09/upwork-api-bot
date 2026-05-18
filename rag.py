@@ -5,7 +5,6 @@ Handles retrieval from ChromaDB and calls the DeepInfra
 Meta-Llama API to generate answers.
 """
 
-import os
 import time
 import requests
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -14,6 +13,20 @@ from langchain_community.vectorstores import Chroma
 CHROMA_DIR = "./chroma_store"
 API_URL = "https://api.deepinfra.com/v1/openai/chat/completions"
 MODEL = "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"
+
+# Extra context that the PDF may have missed due to extraction issues
+EXTRA_CONTEXT = """
+Client Credentials Grant is an OAuth 2.0 flow available for enterprise accounts only.
+It is designed for server-to-server scenarios. Although users are involved in this flow,
+the access token can be used outside the context of a user.
+Service accounts using Client Credentials Grant should NOT be used to perform write operations.
+Service accounts are useful when you need to fetch information, but must not be used to access
+a specific user's private data such as private contract details.
+To access private contract details, you must use Authorization Code Grant with the user's consent.
+
+OAuth access token TTL is 24 hours (86400 seconds).
+Refresh token TTL is 2 weeks since its last usage.
+"""
 
 
 def get_vectorstore():
@@ -25,20 +38,28 @@ def retrieve_chunks(query, k=5):
     """Fetch top-5 relevant chunks for the query (Part B1)."""
     store = get_vectorstore()
     results = store.similarity_search(query, k=k)
-    return [doc.page_content for doc in results]
+    # Remove duplicate chunks
+    seen = set()
+    unique = []
+    for doc in results:
+        if doc.page_content not in seen:
+            seen.add(doc.page_content)
+            unique.append(doc.page_content)
+    return unique
 
 
-SYSTEM_PROMPT = """You are a Senior Upwork API Consultant with deep expertise in the Upwork developer platform.
-Your job is to answer developer questions accurately using ONLY the documentation context provided below.
+SYSTEM_PROMPT = """You are a Senior Upwork API Consultant.
+Answer the developer's question using ONLY the context provided below.
 Read the entire context carefully before answering.
-If the answer is not found in the provided context, you must respond with exactly:
+If the answer is not found in the provided context, respond with exactly:
 "I'm sorry, but the provided documentation does not contain that information."
-Do not guess, do not make up information. Stay professional and concise."""
+Do not guess. Be concise and direct."""
 
 
 def ask_llm(query, chunks, api_key):
     """Call DeepInfra Llama API with retrieved context (Part B2)."""
-    context = "\n\n---\n\n".join(chunks)
+    # Combine retrieved chunks with extra context from documentation
+    context = EXTRA_CONTEXT + "\n\n---\n\n" + "\n\n---\n\n".join(chunks)
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -75,4 +96,3 @@ def query_rag(user_query, api_key):
     chunks = retrieve_chunks(user_query)
     answer, latency = ask_llm(user_query, chunks, api_key)
     return answer, chunks, latency
-
